@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Altmetric Badge</title>
+  <script type="text/javascript" src="https://embed.altmetric.com/assets/embed.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 12px;
+      font-family: Arial, sans-serif;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="altmetric-embed"
+       data-doi="10.4060/cd7599en"
+       data-badge-type="donut"
+       data-badge-popover="right"
+       data-hide-no-mentions="true">
+  </div>
+</body>
+</html>
