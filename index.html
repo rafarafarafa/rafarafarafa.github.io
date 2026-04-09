@@ -51,6 +51,11 @@
       flex-shrink: 0;
     }
 
+    .dim-badge-wrap {
+      display: inline-flex;
+      align-items: center;
+    }
+
     .error {
       color: #a00;
       font-size: 14px;
@@ -152,7 +157,11 @@
         <div class="paper">
           <div class="text">${safeCitation}</div>
           <div class="badges">
-            <span class="__dimensions_badge_embed__" data-doi="${safeDOI}"></span>
+            <div class="dim-badge-wrap">
+              <span class="__dimensions_badge_embed__"
+                    data-doi="${safeDOI}"
+                    data-hide-zero-citations="true"></span>
+            </div>
             <div class="altmetric-embed"
                  data-doi="${safeDOI}"
                  data-badge-type="donut"
@@ -162,6 +171,16 @@
           </div>
         </div>
       `;
+    }
+
+    function installDimensionsHideHandler() {
+      document.body.addEventListener("dimensions_embed:hide", function(event) {
+        const badge = event.target;
+        const wrapper = badge.closest(".dim-badge-wrap");
+        if (wrapper) {
+          wrapper.style.display = "none";
+        }
+      });
     }
 
     async function loadReferences() {
@@ -194,7 +213,7 @@
           window._altmetric_embed_init();
         }
 
-        if (window.__dimensions_embed) {
+        if (window.__dimensions_embed && typeof window.__dimensions_embed.addBadges === "function") {
           window.__dimensions_embed.addBadges();
         }
       } catch (err) {
@@ -203,6 +222,7 @@
       }
     }
 
+    installDimensionsHideHandler();
     loadReferences();
   </script>
 </body>
