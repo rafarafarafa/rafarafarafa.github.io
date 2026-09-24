@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Publication Metrics</title>
+
+  <!-- Altmetric -->
+  <script type="text/javascript" src="https://embed.altmetric.com/assets/embed.js"></script>
+
+  <!-- Dimensions -->
+  <script async src="https://badge.dimensions.ai/static/ai/badge.js" charset="utf-8"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      padding: 12px;
+    }
+
+    #pub-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .paper {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 22px;
+      padding: 14px 16px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .text {
+      font-size: 18px;
+      line-height: 1.5;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .badges {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+
+    .dim-badge-wrap {
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .altmetric-wrap {
+      display: inline-flex;
+      align-items: center;
+      transform: scale(1.3);
+      transform-origin: center left;
+    }
+
+    .error {
+      color: #a00;
+      font-size: 16px;
+      padding: 8px 0;
+    }
+
+    .loading {
+      color: #555;
+      font-size: 16px;
+      padding: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="status" class="loading">Loading publications...</div>
+  <div id="pub-list"></div>
+
+  <script>
+    function parseCSVLine(line) {
+      const result = [];
+      let current = "";
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        const nextChar = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && nextChar === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          result.push(current);
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+
+      result.push(current);
+      return result;
+    }
+
+    function parseCSV(text) {
+      const lines = text
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+
+      if (lines.length < 2) {
+        return [];
+      }
+
+      const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+      const citationIndex = headers.indexOf("citation");
+      const doiIndex = headers.indexOf("doi");
+
+      if (citationIndex === -1 || doiIndex === -1) {
+        throw new Error("CSV must contain 'citation' and 'doi' columns.");
+      }
+
+      const rows = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = parseCSVLine(lines[i]);
+        rows.push({
+          citation: (cols[citationIndex] || "").trim(),
+          doi: normalizeDOI((cols[doiIndex] || "").trim())
+        });
+      }
+
+      return rows.filter(row => row.citation && row.doi);
+    }
+
+    function normalizeDOI(doi) {
+      return doi
+        .replace(/^https?:\/\/doi\.org\//i, "")
+        .replace(/^doi:\s*/i, "")
+        .trim();
+    }
+
+    function escapeHTML(str) {
+      return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function createPaperHTML(citation, doi) {
+      const safeDOI = escapeHTML(doi);
+
+      return `
+        <div class="paper">
+          <div class="text">${citation}</div>
+          <div class="badges">
+            <div class="dim-badge-wrap">
+              <span class="__dimensions_badge_embed__"
+                    data-doi="${safeDOI}"
+                    data-hide-zero-citations="true"
+                    data-legend="hover-left"
+                    data-style="small_circle"></span>
+            </div>
+            <div class="altmetric-wrap">
+              <div class="altmetric-embed"
+                   data-doi="${safeDOI}"
+                   data-badge-type="donut"
+                   data-badge-popover="left"
+                   data-hide-no-mentions="true">
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function installDimensionsHideHandler() {
+      document.body.addEventListener("dimensions_embed:hide", function (event) {
+        const badge = event.target;
+        const wrapper = badge.closest(".dim-badge-wrap");
+        if (wrapper) {
+          wrapper.style.display = "none";
+        }
+      });
+    }
+
+    async function loadReferences() {
+      const status = document.getElementById("status");
+      const pubList = document.getElementById("pub-list");
+
+      try {
+        const response = await fetch("references.csv", { cache: "no-store" });
+
+        if (!response.ok) {
+          throw new Error(`Could not load references.csv (${response.status})`);
+        }
+
+        const csvText = await response.text();
+        const rows = parseCSV(csvText);
+
+        if (rows.length === 0) {
+          status.className = "error";
+          status.textContent = "No valid references found in references.csv.";
+          return;
+        }
+
+        pubList.innerHTML = rows
+          .map(row => createPaperHTML(row.citation, row.doi))
+          .join("");
+
+        status.remove();
+
+        if (window._altmetric_embed_init) {
+          window._altmetric_embed_init();
+        }
+
+        if (window.__dimensions_embed && typeof window.__dimensions_embed.addBadges === "function") {
+          window.__dimensions_embed.addBadges();
+        }
+      } catch (err) {
+        status.className = "error";
+        status.textContent = "Error loading publications: " + err.message;
+      }
+    }
+
+    installDimensionsHideHandler();
+    loadReferences();
+  </script>
+</body>
+</html>
